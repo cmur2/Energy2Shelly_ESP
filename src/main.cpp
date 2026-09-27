@@ -137,7 +137,7 @@ double round2(double value) {
 
   // fix Marstek bug: make sure to have decimal numbers
   if(forcePwrDecimals && (ivalue % 100 == 0)) ivalue++;
-  
+
   return ivalue / 100.0;
 }
 
@@ -1022,7 +1022,7 @@ void parseSUNSPEC() {
   #define SUNSPEC_POWER_FACTOR_SCALE 40106
   #define SUNSPEC_FREQUENCY 40085
   #define SUNSPEC_FREQUENCY_SCALE 40086
-  
+
   modbus_ip.fromString(mqtt_server);
   if (!modbus1.isConnected(modbus_ip)) {
     modbus1.connect(modbus_ip, String(mqtt_port).toInt());
@@ -1128,7 +1128,7 @@ void WifiManagerSetup() {
   strcpy(shelly_port, preferences.getString("shelly_port", shelly_port).c_str());
   strcpy(force_pwr_decimals, preferences.getString("force_pwr_decimals", force_pwr_decimals).c_str());
   strcpy(sma_id, preferences.getString("sma_id", sma_id).c_str());
-  
+
   WiFiManagerParameter custom_section1("<h3>General settings</h3>");
   WiFiManagerParameter custom_input_type("type", "<b>Data source</b><br><code>MQTT</code> for MQTT<br><code>HTTP</code> for generic HTTP<br><code>SMA</code> for SMA EM/HM multicast<br><code>SHRDZM</code> for SHRDZM UDP data<br><code>SUNSPEC</code> for Modbus TCP SUNSPEC data", input_type, 40);
   WiFiManagerParameter custom_mqtt_server("server", "<b>Server</b><br>MQTT Server IP, query url for generic HTTP or Modbus TCP server IP for SUNSPEC", mqtt_server, 160);
@@ -1188,7 +1188,7 @@ void WifiManagerSetup() {
   wifiManager.addParameter(&custom_power_l3_path);
   wifiManager.addParameter(&custom_energy_in_path);
   wifiManager.addParameter(&custom_energy_out_path);
-  
+
 
   if (!wifiManager.autoConnect("Energy2Shelly")) {
     DEBUG_SERIAL.println("failed to connect and hit timeout");
@@ -1426,7 +1426,7 @@ void setup(void) {
   server.begin();
 
   // Set up RPC over UDP for Marstek users
-  UdpRPC.begin(String(shelly_port).toInt()); 
+  UdpRPC.begin(String(shelly_port).toInt());
 
   // Set up MQTT
   if (dataMQTT) {
@@ -1511,7 +1511,7 @@ void setup(void) {
   DEBUG_SERIAL.println("mDNS responder started");
 }
 
-void loop() {
+void worker_loop(int currentMillis) {
 #ifndef ESP32
   MDNS.update();
 #endif
@@ -1538,19 +1538,38 @@ void loop() {
     parseSHRDZM();
   }
   if (dataSUNSPEC) {
-     currentMillis = millis();
     if (currentMillis - startMillis_sunspec >= period) {
        parseSUNSPEC();
       startMillis_sunspec = currentMillis;
     }
-   
+
   }
   if (dataHTTP) {
-    currentMillis = millis();
     if (currentMillis - startMillis >= period) {
       queryHTTP();
       startMillis = currentMillis;
     }
   }
   handleblinkled();
+}
+
+void loop() {
+  currentMillis = millis();
+
+  static unsigned long WiFilastConnectionCheck = 0;
+
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFilastConnectionCheck = currentMillis;
+    worker_loop(currentMillis);
+  } else {
+    // not connected, attempt to reconnect
+    static unsigned long reconnectStart = 0;
+
+    // Attempt to reconnect every 10 seconds, to fast reconnection can cause issues with some routers and APs
+    if (currentMillis - reconnectStart > 10000) {
+      reconnectStart = currentMillis;
+      WiFi.reconnect(); // forces a disconnect and reconnect, hence the 10s delay to avoid rapid reconnection attempts
+      DEBUG_SERIAL.println(F("WiFi disconnected, attempting to reconnect..."));
+    }
+  }
 }
