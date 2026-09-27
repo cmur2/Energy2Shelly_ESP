@@ -1189,6 +1189,7 @@ void WifiManagerSetup() {
   wifiManager.addParameter(&custom_energy_in_path);
   wifiManager.addParameter(&custom_energy_out_path);
 
+  wifiManager.setConfigPortalTimeout(180);
 
   if (!wifiManager.autoConnect("Energy2Shelly")) {
     DEBUG_SERIAL.println("failed to connect and hit timeout");
